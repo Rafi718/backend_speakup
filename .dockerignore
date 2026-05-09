@@ -1,0 +1,50 @@
+.git
+.gitignore
+.gitattributes
+.editorconfig
+
+# Local env - values must come from Dokploy env
+.env
+.env.*
+!.env.example
+!.env.production.example
+
+# Dependencies (installed during build)
+node_modules
+vendor
+
+# Build output (rebuilt during image build)
+public/build
+public/hot
+
+# Laravel runtime files - recreated in container
+storage/logs/*
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/views/*
+storage/framework/testing/*
+bootstrap/cache/*.php
+
+# Keep the .gitkeep-style entries
+!storage/**/.gitignore
+!bootstrap/cache/.gitignore
+
+# Dev / IDE
+.idea
+.vscode
+.kiro
+.phpunit.cache
+.phpunit.result.cache
+
+# Docs & tests (optional - keep tests if you want CI inside image)
+tests
+phpunit.xml
+
+# Docker / deployment
+docker-compose*.yml
+Dockerfile*
+.dockerignore
+
+# OS junk
+.DS_Store
+Thumbs.db
