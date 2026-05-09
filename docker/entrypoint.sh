@@ -23,7 +23,9 @@ if [ -z "${APP_KEY}" ]; then
     php artisan key:generate --force --no-interaction || true
 fi
 
+# ---------------------------------------------------------------------------
 # Wait for database (best-effort, non-fatal)
+# ---------------------------------------------------------------------------
 if [ -n "${DB_HOST}" ] && [ -n "${DB_PORT}" ]; then
     echo "[entrypoint] Waiting for database ${DB_HOST}:${DB_PORT}..."
     i=0
@@ -38,6 +40,45 @@ if [ -n "${DB_HOST}" ] && [ -n "${DB_PORT}" ]; then
     done
 fi
 
+# ---------------------------------------------------------------------------
+# One-shot seed: import /var/www/html/database/seed.sql when DB is empty.
+# Guarded by .seeded marker on persistent storage volume so it runs once.
+# ---------------------------------------------------------------------------
+SEED_FILE="/var/www/html/database/seed.sql"
+SEED_MARKER="/var/www/html/storage/.seed_imported"
+
+if [ -f "$SEED_FILE" ] && [ ! -f "$SEED_MARKER" ] && \
+   [ -n "${DB_HOST}" ] && [ -n "${DB_DATABASE}" ] && \
+   [ -n "${DB_USERNAME}" ] && [ -n "${DB_PASSWORD}" ]; then
+
+    echo "[entrypoint] Seed check: counting existing tables in ${DB_DATABASE}..."
+    TABLE_COUNT=$(MYSQL_PWD="$DB_PASSWORD" mariadb \
+        --protocol=tcp -h "$DB_HOST" -P "${DB_PORT:-3306}" -u "$DB_USERNAME" \
+        --skip-ssl \
+        -N -B -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '$DB_DATABASE';" 2>/dev/null || echo "err")
+
+    if [ "$TABLE_COUNT" = "err" ]; then
+        echo "[entrypoint] Could not query information_schema (skipping seed)."
+    elif [ "$TABLE_COUNT" = "0" ]; then
+        echo "[entrypoint] Database is empty. Importing seed.sql ..."
+        if MYSQL_PWD="$DB_PASSWORD" mariadb \
+                --protocol=tcp -h "$DB_HOST" -P "${DB_PORT:-3306}" \
+                --skip-ssl \
+                -u "$DB_USERNAME" "$DB_DATABASE" < "$SEED_FILE"; then
+            echo "[entrypoint] Seed import OK."
+            touch "$SEED_MARKER"
+        else
+            echo "[entrypoint] !! Seed import FAILED. Will retry on next boot."
+        fi
+    else
+        echo "[entrypoint] Database already has ${TABLE_COUNT} tables. Skipping seed import."
+        touch "$SEED_MARKER"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# Clear stale caches + run pending migrations
+# ---------------------------------------------------------------------------
 echo "[entrypoint] Clearing stale caches..."
 php artisan config:clear || true
 php artisan route:clear || true
