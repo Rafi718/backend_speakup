@@ -45,7 +45,10 @@ php artisan view:clear || true
 php artisan cache:clear || true
 
 echo "[entrypoint] Running migrations..."
-php artisan migrate --force --no-interaction || echo "[entrypoint] Migrations failed - check DB credentials."
+if ! php artisan migrate --force --no-interaction; then
+    echo "[entrypoint] !! Migration failed. Check DB credentials / connectivity."
+    echo "[entrypoint] !! Container will keep running so you can inspect logs, but app will likely return 500."
+fi
 
 echo "[entrypoint] Ensuring storage symlink..."
 php artisan storage:link || true
