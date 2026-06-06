@@ -64,10 +64,10 @@ try {
 # --------------------------------------------------
 # Restore SQL backup if present
 # --------------------------------------------------
-if [ -f "/var/www/html/docker-entrypoint-initdb.d/backup.sql" ]; then
+if [ -f "/var/www/html/backups/backup.sql" ]; then
     echo "[entrypoint] Found backup.sql - restoring database..."
-    mysql -h "${DB_HOST}" -P "${DB_PORT}" -u root -p"${DB_ROOT_PASSWORD}" "${DB_DATABASE}" < /var/www/html/docker-entrypoint-initdb.d/backup.sql 2>/dev/null \
-        || mysql -h "${DB_HOST}" -P "${DB_PORT}" -u "${DB_USERNAME}" -p"${DB_PASSWORD}" "${DB_DATABASE}" < /var/www/html/docker-entrypoint-initdb.d/backup.sql
+    mysql -h "${DB_HOST}" -P "${DB_PORT}" -u root -p"${DB_ROOT_PASSWORD}" "${DB_DATABASE}" < /var/www/html/backups/backup.sql 2>/dev/null \
+        || mysql -h "${DB_HOST}" -P "${DB_PORT}" -u "${DB_USERNAME}" -p"${DB_PASSWORD}" "${DB_DATABASE}" < /var/www/html/backups/backup.sql
     echo "[entrypoint] Backup restored successfully!"
     HAS_MIGRATIONS="yes"
 fi

@@ -28,6 +28,30 @@
 - VPS dengan Ubuntu 20.04+ (2GB RAM minimum)
 - Domain yang mengarah ke IP VPS (A record)
 - Docker & Docker Compose terinstall
+- **Domain di Cloudflare** (untuk handle SSL/HTTPS - opsional tapi direkomendasikan)
+- **Port 80/443 di VPS sudah dipakai?** Tenang, SpeakUp jalan di port 8080 via Cloudflare proxy
+
+## Arsitektur
+
+```
+┌─────────────────────────────────────────────────────┐
+│                     VPS (Ubuntu)                    │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐ │
+│  │  Lokaclip   │  │  SpeakUp    │  │   SpeakUp   │ │
+│  │   Caddy     │  │   PHP-FPM   │  │    MySQL    │ │
+│  │  Port 80/443│  │  Port 9000  │  │  Port 3306  │ │
+│  └─────────────┘  └──────┬──────┘  └─────────────┘ │
+│                          │                         │
+│         Host port 8080 ←─┘                         │
+└──────────────────────────│──────────────────────────┘
+                           │
+                    ┌──────┴──────┐
+                    │ Cloudflare │ (Proxy + SSL)
+                    └──────┬──────┘
+                           │
+                           ▼
+                  https://api.speakup.web.id
+```
 
 ## Quick Start
 

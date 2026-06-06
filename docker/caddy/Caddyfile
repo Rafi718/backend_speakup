@@ -1,21 +1,20 @@
 {
-	# Email for ACME (Let's Encrypt)
-	email {$ACME_EMAIL:admin@speakup.web.id}
-
-	# Auto HTTPS
-	auto_https disable_redirects
+	# HTTP only mode - HTTPS handled by Cloudflare
+	# Since Caddy is behind Cloudflare proxy, auto_https must be disabled
+	auto_https off
 }
 
-# API domain
-{$APP_DOMAIN:api.speakup.web.id} {
+# SpeakUp API - accessed via Cloudflare proxy
+# Cloudflare will terminate SSL and forward HTTP to this port
+:80 {
+	# Trust Cloudflare IPs for real client IP
+	trusted_proxies 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22
+
 	# Root directory
 	root * /var/www/html/public
 
 	# Enable file server
 	file_server
-
-	# Trust reverse proxy headers (Dokploy/Traefik/Cloudflare)
-	trusted_proxies private_ranges
 
 	# Logging
 	log {
@@ -28,10 +27,7 @@
 
 	# PHP-FPM
 	php_fastcgi 127.0.0.1:9000 {
-		# Resolve symlinks
 		resolve_root_symlink
-
-		# Environment variables for PHP
 		env PHP_VALUE "upload_max_filesize=25M
 post_max_size=25M
 memory_limit=512M"
@@ -39,7 +35,7 @@ memory_limit=512M"
 
 	# Security headers
 	header {
-		# HSTS
+		# HSTS (1 year, since Cloudflare handles SSL)
 		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
 		# Prevent MIME sniffing
 		X-Content-Type-Options "nosniff"
@@ -49,24 +45,16 @@ memory_limit=512M"
 		X-XSS-Protection "1; mode=block"
 		# Remove server header
 		-Server
+		# Allow CORS for frontend (adjust as needed)
+		Access-Control-Allow-Origin "*"
+		Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+		Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
 	}
 
-	# Block access to sensitive files
-	@blocked {
-		path /.*
-		not path /.well-known/*
-	}
-	respond @blocked 404
+	# Handle preflight OPTIONS requests
+	@options method OPTIONS
+	respond @options 204
 
 	# Health check endpoint
 	respond /up 200
-
-	# Handle OPTIONS requests for CORS
-	@options method OPTIONS
-	respond @options 204
-}
-
-# Redirect www to non-www
-www.{$APP_DOMAIN:api.speakup.web.id} {
-	redir https://{$APP_DOMAIN:api.speakup.web.id}{uri} permanent
 }

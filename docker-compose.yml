@@ -44,9 +44,7 @@ services:
       mysql:
         condition: service_healthy
     ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
+      - "8080:80"
     environment:
       # App
       APP_NAME: "${APP_NAME:-SpeakUp}"
@@ -99,11 +97,9 @@ services:
       SKIP_MIGRATION: "${SKIP_MIGRATION:-false}"
     volumes:
       - app_storage:/var/www/html/storage
-      - caddy_data:/data
-      - caddy_config:/config
       # Optional: mount backup SQL to auto-restore on first start
       # Place your backup.sql in ./backups/ folder
-      - ./backups:/var/www/html/docker-entrypoint-initdb.d:ro
+      - ./backups:/var/www/html/backups:ro
     networks:
       - speakup-network
 
@@ -111,10 +107,6 @@ volumes:
   mysql_data:
     driver: local
   app_storage:
-    driver: local
-  caddy_data:
-    driver: local
-  caddy_config:
     driver: local
 
 networks:
