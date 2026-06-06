@@ -37,7 +37,7 @@ services:
   app:
     build:
       context: .
-      dockerfile: Dockerfile.caddy
+      dockerfile: Dockerfile
     container_name: speakup-app
     restart: unless-stopped
     depends_on:
