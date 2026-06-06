@@ -23,23 +23,7 @@ RUN composer dump-autoload --optimize --no-dev --classmap-authoritative
 
 
 # ---------------------------------------------------------------------------
-# Stage 2 - Node (build Vite assets)
-# ---------------------------------------------------------------------------
-FROM node:20-alpine AS frontend
-
-WORKDIR /app
-
-COPY package.json package-lock.json* ./
-RUN npm install --no-audit --no-fund
-
-COPY . .
-COPY --from=vendor /app/vendor ./vendor
-
-RUN npm run build
-
-
-# ---------------------------------------------------------------------------
-# Stage 3 - Runtime (PHP-FPM + Nginx + Supervisor)
+# Stage 2 - Runtime (PHP-FPM + Caddy)
 # ---------------------------------------------------------------------------
 FROM php:8.2-fpm-alpine AS runtime
 
@@ -51,8 +35,6 @@ ENV TZ=Asia/Jakarta \
 # System & PHP extensions
 RUN set -eux; \
     apk add --no-cache \
-        nginx \
-        supervisor \
         bash \
         curl \
         tzdata \
@@ -88,26 +70,27 @@ RUN set -eux; \
     apk del --no-network .build-deps; \
     rm -rf /var/cache/apk/* /tmp/*
 
-# Config files
-COPY docker/php/php.ini            /usr/local/etc/php/conf.d/zz-app.ini
-COPY docker/php/www.conf           /usr/local/etc/php-fpm.d/zz-www.conf
-COPY docker/nginx/nginx.conf       /etc/nginx/nginx.conf
-COPY docker/nginx/default.conf     /etc/nginx/http.d/default.conf
-COPY docker/supervisor/supervisord.conf /etc/supervisor/supervisord.conf
-COPY docker/entrypoint.sh          /usr/local/bin/entrypoint.sh
+# Install Caddy
+RUN set -eux; \
+    apk add --no-cache caddy; \
+    caddy version
 
+# PHP config
+COPY docker/php/php.ini /usr/local/etc/php/conf.d/zz-app.ini
+COPY docker/php/www.conf /usr/local/etc/php-fpm.d/zz-www.conf
+
+# Caddy config
+COPY docker/caddy/Caddyfile /etc/caddy/Caddyfile
+
+# Entrypoint
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN sed -i 's/\r$//' /usr/local/bin/entrypoint.sh \
-    && chmod +x /usr/local/bin/entrypoint.sh \
-    && rm -f /etc/nginx/http.d/default.conf.default \
-    && mkdir -p /run/nginx /var/log/supervisor
+    && chmod +x /usr/local/bin/entrypoint.sh
 
 WORKDIR /var/www/html
 
 # Application code (with vendor) from composer stage
 COPY --from=vendor --chown=www-data:www-data /app /var/www/html
-
-# Built Vite assets
-COPY --from=frontend --chown=www-data:www-data /app/public/build /var/www/html/public/build
 
 RUN set -eux; \
     mkdir -p storage/framework/cache/data \
@@ -118,10 +101,10 @@ RUN set -eux; \
     chown -R www-data:www-data storage bootstrap/cache; \
     chmod -R 775 storage bootstrap/cache
 
-EXPOSE 80
+EXPOSE 80 443
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD curl -fsS http://127.0.0.1/up || exit 1
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
-CMD ["supervisord", "-c", "/etc/supervisor/supervisord.conf", "-n"]
+CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]

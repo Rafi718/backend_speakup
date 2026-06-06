@@ -1,67 +1,122 @@
-version: "3.8"
-
 services:
+  # -------------------------------------------------------
+  # MySQL Database
+  # -------------------------------------------------------
+  mysql:
+    image: mysql:8
+    container_name: speakup-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: "${DB_ROOT_PASSWORD:-rootpass}"
+      MYSQL_DATABASE: "${DB_DATABASE:-db_speakup}"
+      MYSQL_USER: "${DB_USERNAME:-speakup_user}"
+      MYSQL_PASSWORD: "${DB_PASSWORD:-speakup_pass}"
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --innodb-buffer-pool-size=256M
+      --max-connections=200
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD:-rootpass}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - speakup-network
+
+  # -------------------------------------------------------
+  # Laravel App (PHP-FPM + Caddy)
+  # -------------------------------------------------------
   app:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.caddy
     container_name: speakup-app
     restart: unless-stopped
-    expose:
-      - "80"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
     environment:
+      # App
       APP_NAME: "${APP_NAME:-SpeakUp}"
       APP_KEY: "${APP_KEY}"
       APP_ENV: "${APP_ENV:-production}"
       APP_DEBUG: "${APP_DEBUG:-false}"
       APP_URL: "${APP_URL:-https://api.speakup.web.id}"
+      APP_DOMAIN: "${APP_DOMAIN:-api.speakup.web.id}"
 
+      # Logging
       LOG_CHANNEL: stderr
       LOG_LEVEL: "${LOG_LEVEL:-info}"
 
-      DB_CONNECTION: "${DB_CONNECTION:-mysql}"
-      DB_HOST: "${DB_HOST}"
-      DB_PORT: "${DB_PORT:-3306}"
-      DB_DATABASE: "${DB_DATABASE}"
-      DB_USERNAME: "${DB_USERNAME}"
-      DB_PASSWORD: "${DB_PASSWORD}"
+      # Database
+      DB_CONNECTION: mysql
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_DATABASE: "${DB_DATABASE:-db_speakup}"
+      DB_USERNAME: "${DB_USERNAME:-speakup_user}"
+      DB_PASSWORD: "${DB_PASSWORD:-speakup_pass}"
 
-      SESSION_DRIVER: "${SESSION_DRIVER:-database}"
+      # Session & Cache
+      SESSION_DRIVER: database
       SESSION_LIFETIME: "${SESSION_LIFETIME:-120}"
       SESSION_DOMAIN: "${SESSION_DOMAIN:-}"
-      CACHE_STORE: "${CACHE_STORE:-database}"
-      QUEUE_CONNECTION: "${QUEUE_CONNECTION:-database}"
+      CACHE_STORE: database
+      QUEUE_CONNECTION: database
 
+      # Sanctum & CORS
       SANCTUM_STATEFUL_DOMAINS: "${SANCTUM_STATEFUL_DOMAINS:-}"
       CORS_ALLOWED_ORIGINS: "${CORS_ALLOWED_ORIGINS:-}"
-      CORS_ALLOWED_ORIGINS_PATTERNS: "${CORS_ALLOWED_ORIGINS_PATTERNS:-}"
       FRONTEND_URL: "${FRONTEND_URL:-}"
 
+      # Mail
       MAIL_MAILER: "${MAIL_MAILER:-log}"
       MAIL_HOST: "${MAIL_HOST:-}"
       MAIL_PORT: "${MAIL_PORT:-}"
       MAIL_USERNAME: "${MAIL_USERNAME:-}"
       MAIL_PASSWORD: "${MAIL_PASSWORD:-}"
-      MAIL_ENCRYPTION: "${MAIL_ENCRYPTION:-}"
       MAIL_FROM_ADDRESS: "${MAIL_FROM_ADDRESS:-noreply@speakup.local}"
       MAIL_FROM_NAME: "${MAIL_FROM_NAME:-SpeakUp}"
 
+      # Trust proxy (Caddy)
       TRUSTED_PROXIES: "*"
+
+      # ACME Email (Let's Encrypt)
+      ACME_EMAIL: "${ACME_EMAIL:-admin@speakup.web.id}"
+
+      # Set to "true" to skip migrations (use if you restore from backup)
+      SKIP_MIGRATION: "${SKIP_MIGRATION:-false}"
     volumes:
       - app_storage:/var/www/html/storage
+      - caddy_data:/data
+      - caddy_config:/config
+      # Optional: mount backup SQL to auto-restore on first start
+      # Place your backup.sql in ./backups/ folder
+      - ./backups:/var/www/html/docker-entrypoint-initdb.d:ro
     networks:
-      - dokploy-network
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.speakup-app.rule=Host(`${APP_HOST:-api.speakup.web.id}`)"
-      - "traefik.http.routers.speakup-app.entrypoints=web,websecure"
-      - "traefik.http.routers.speakup-app.tls.certresolver=letsencrypt"
-      - "traefik.http.services.speakup-app.loadbalancer.server.port=80"
-      - "traefik.docker.network=dokploy-network"
+      - speakup-network
 
 volumes:
+  mysql_data:
+    driver: local
   app_storage:
+    driver: local
+  caddy_data:
+    driver: local
+  caddy_config:
+    driver: local
 
 networks:
-  dokploy-network:
-    external: true
+  speakup-network:
+    driver: bridge
