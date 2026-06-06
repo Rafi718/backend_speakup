@@ -1,9 +1,10 @@
 {
-	# HTTP only mode - HTTPS handled by Cloudflare
+	# Disable all HTTPS/redirect behavior
 	auto_https off
+	http_port 80
 }
 
-# SpeakUp API - accessed via Cloudflare proxy
+# SpeakUp API - HTTP only (Cloudflare handles HTTPS)
 :80 {
 	# Root directory
 	root * /var/www/html/public
