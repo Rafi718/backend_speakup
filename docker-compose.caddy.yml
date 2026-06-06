@@ -96,10 +96,16 @@ services:
 
       # ACME Email (Let's Encrypt)
       ACME_EMAIL: "${ACME_EMAIL:-admin@speakup.web.id}"
+
+      # Set to "true" to skip migrations (use if you restore from backup)
+      SKIP_MIGRATION: "${SKIP_MIGRATION:-false}"
     volumes:
       - app_storage:/var/www/html/storage
       - caddy_data:/data
       - caddy_config:/config
+      # Optional: mount backup SQL to auto-restore on first start
+      # Place your backup.sql in ./backups/ folder
+      - ./backups:/var/www/html/docker-entrypoint-initdb.d:ro
     networks:
       - speakup-network
 

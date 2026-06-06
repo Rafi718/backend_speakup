@@ -93,17 +93,43 @@ docker compose exec app php artisan route:cache
 
 ### 4. Restore Backup MySQL
 
+Database backup (`db_speakup.sql`) sudah ada di folder `backups/backup.sql`. Ada 2 cara restore:
+
+#### Cara 1: Otomatis saat Start (Recommended)
+
 ```bash
-# Copy backup file ke server
-scp backup.sql user@server:/opt/speakup/backend_speakup/
+# Pastikan backup.sql ada di folder backups/
+ls backups/backup.sql
 
-# Restore
-docker compose exec -T mysql mysql -u root -p"ROOT_PASSWORD" db_speakup < backup.sql
+# Edit .env - set SKIP_MIGRATION=true
+nano .env
+# SKIP_MIGRATION=true
 
-# Atau gunakan script
-chmod +x backup.sh
-./backup.sh restore backup.sql
+# Start services - backup akan auto-restore
+docker compose up -d
 ```
+
+#### Cara 2: Manual dengan Script
+
+```bash
+# Copy backup file ke server (jika belum ada)
+scp db_speakup.sql user@server:/opt/speakup/backend_speakup/backups/backup.sql
+
+# Restore menggunakan script
+chmod +x restore-db.sh
+./restore-db.sh
+# atau
+./restore-db.sh /path/to/backup.sql
+```
+
+#### Cara 3: Manual dengan mysqldump
+
+```bash
+# Restore
+docker compose exec -T mysql mysql -u root -p"ROOT_PASSWORD" db_speakup < backups/backup.sql
+```
+
+**Penting:** Setelah restore, set `SKIP_MIGRATION=true` di `.env` agar Laravel tidak run migrations (yang akan duplikat data).
 
 ### 5. Verifikasi
 
@@ -118,9 +144,13 @@ docker compose logs -f
 curl https://api.speakup.web.id/up
 ```
 
-## Commands
+### Notes Penting
 
-### Docker Compose
+- **Database name**: `db_speakup` (sudah sesuai dengan backup)
+- **Skip migrations**: Set `SKIP_MIGRATION=true` di `.env` setelah restore backup, agar Laravel tidak duplikat data
+- **Backup location**: `backups/backup.sql` - folder ini di-mount ke container, jadi akan auto-restore saat container pertama start
+
+## Commands
 
 ```bash
 # Start services
