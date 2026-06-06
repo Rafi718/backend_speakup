@@ -101,7 +101,7 @@ RUN set -eux; \
     chown -R www-data:www-data storage bootstrap/cache; \
     chmod -R 775 storage bootstrap/cache
 
-EXPOSE 80
+EXPOSE 80 443
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD curl -fsS http://127.0.0.1/up || exit 1

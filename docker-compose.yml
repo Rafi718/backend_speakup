@@ -45,6 +45,7 @@ services:
         condition: service_healthy
     ports:
       - "8080:80"
+      - "8443:443"
     environment:
       # App
       APP_NAME: "${APP_NAME:-SpeakUp}"
@@ -100,6 +101,8 @@ services:
       # Optional: mount backup SQL to auto-restore on first start
       # Place your backup.sql in ./backups/ folder
       - ./backups:/var/www/html/backups:ro
+      # SSL certificates (Cloudflare Origin Certificate)
+      - ./docker/caddy/certs:/etc/caddy/certs:ro
     networks:
       - speakup-network
 
