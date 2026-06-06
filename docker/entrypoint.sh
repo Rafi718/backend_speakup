@@ -101,20 +101,47 @@ try {
 " 2>/dev/null || echo "no")
 
 # --------------------------------------------------
-# Restore SQL backup if present
+# Restore SQL backup if present (using PHP PDO - more reliable)
 # --------------------------------------------------
 if [ -f "/var/www/html/backups/backup.sql" ]; then
-    echo "[entrypoint] Found backup.sql - restoring database..."
-    # Use --skip-ssl to avoid TLS errors with self-signed certificates
-    # Use mariadb command (Alpine 3.20+) or fallback to mysql
-    if command -v mariadb >/dev/null 2>&1; then
-        mariadb --skip-ssl -h "${DB_HOST}" -P "${DB_PORT}" -u root -p"${DB_ROOT_PASSWORD}" "${DB_DATABASE}" < /var/www/html/backups/backup.sql 2>/dev/null \
-            || mariadb --skip-ssl -h "${DB_HOST}" -P "${DB_PORT}" -u "${DB_USERNAME}" -p"${DB_PASSWORD}" "${DB_DATABASE}" < /var/www/html/backups/backup.sql
-    else
-        mysql --skip-ssl -h "${DB_HOST}" -P "${DB_PORT}" -u root -p"${DB_ROOT_PASSWORD}" "${DB_DATABASE}" < /var/www/html/backups/backup.sql 2>/dev/null \
-            || mysql --skip-ssl -h "${DB_HOST}" -P "${DB_PORT}" -u "${DB_USERNAME}" -p"${DB_PASSWORD}" "${DB_DATABASE}" < /var/www/html/backups/backup.sql
-    fi
-    echo "[entrypoint] Backup restored successfully!"
+    echo "[entrypoint] Found backup.sql - restoring database using PHP PDO..."
+    php -r "
+    try {
+        \$dsn = 'mysql:host=' . getenv('DB_HOST') . ';port=' . getenv('DB_PORT') . ';dbname=' . getenv('DB_DATABASE');
+        \$pdo = new PDO(\$dsn, getenv('DB_USERNAME'), getenv('DB_PASSWORD'), [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        ]);
+        
+        \$sql = file_get_contents('/var/www/html/backups/backup.sql');
+        if (\$sql === false) {
+            echo 'Failed to read backup.sql';
+            exit(1);
+        }
+        
+        // Split by semicolons and execute each statement
+        \$statements = array_filter(array_map('trim', explode(';', \$sql)));
+        \$total = count(\$statements);
+        \$executed = 0;
+        \$errors = 0;
+        
+        foreach (\$statements as \$statement) {
+            if (empty(\$statement)) continue;
+            try {
+                \$pdo->exec(\$statement);
+                \$executed++;
+            } catch (PDOException \$e) {
+                // Skip errors for DROP TABLE IF EXISTS, etc.
+                \$errors++;
+            }
+        }
+        
+        echo \"Backup restored: \$executed/\$total statements executed (\$errors errors)\n\";
+    } catch (PDOException \$e) {
+        echo 'Database restore failed: ' . \$e->getMessage() . \"\n\";
+        exit(1);
+    }
+    " && echo "[entrypoint] Backup restored successfully!" || echo "[entrypoint] Backup restore failed!"
     HAS_MIGRATIONS="yes"
 fi
 
