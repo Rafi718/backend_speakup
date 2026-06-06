@@ -19,6 +19,45 @@ chown -R www-data:www-data storage bootstrap/cache
 chown -R www-data:www-data public 2>/dev/null || true
 chmod -R 775 storage bootstrap/cache
 
+# --------------------------------------------------
+# Create .env file from environment variables
+# --------------------------------------------------
+if [ ! -f "/var/www/html/.env" ]; then
+    echo "[entrypoint] Creating .env from environment variables..."
+    cat > /var/www/html/.env << EOF
+APP_NAME=${APP_NAME:-SpeakUp}
+APP_ENV=${APP_ENV:-production}
+APP_KEY=${APP_KEY}
+APP_DEBUG=${APP_DEBUG:-false}
+APP_URL=${APP_URL:-http://localhost}
+
+LOG_CHANNEL=${LOG_CHANNEL:-stderr}
+LOG_LEVEL=${LOG_LEVEL:-error}
+
+DB_CONNECTION=${DB_CONNECTION:-mysql}
+DB_HOST=${DB_HOST:-mysql}
+DB_PORT=${DB_PORT:-3306}
+DB_DATABASE=${DB_DATABASE:-db_speakup}
+DB_USERNAME=${DB_USERNAME:-speakup_user}
+DB_PASSWORD=${DB_PASSWORD}
+
+SESSION_DRIVER=${SESSION_DRIVER:-database}
+SESSION_LIFETIME=${SESSION_LIFETIME:-120}
+SESSION_DOMAIN=${SESSION_DOMAIN:-}
+CACHE_STORE=${CACHE_STORE:-database}
+QUEUE_CONNECTION=${QUEUE_CONNECTION:-database}
+
+SANCTUM_STATEFUL_DOMAINS=${SANCTUM_STATEFUL_DOMAINS:-}
+CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-}
+FRONTEND_URL=${FRONTEND_URL:-}
+
+MAIL_MAILER=${MAIL_MAILER:-log}
+MAIL_FROM_ADDRESS=${MAIL_FROM_ADDRESS:-noreply@speakup.local}
+MAIL_FROM_NAME=${MAIL_FROM_NAME:-SpeakUp}
+EOF
+    echo "[entrypoint] .env created successfully."
+fi
+
 if [ -z "${APP_KEY}" ]; then
     echo "[entrypoint] WARNING: APP_KEY is empty. Generating a temporary one."
     php artisan key:generate --force --no-interaction || true
@@ -66,8 +105,15 @@ try {
 # --------------------------------------------------
 if [ -f "/var/www/html/backups/backup.sql" ]; then
     echo "[entrypoint] Found backup.sql - restoring database..."
-    mysql -h "${DB_HOST}" -P "${DB_PORT}" -u root -p"${DB_ROOT_PASSWORD}" "${DB_DATABASE}" < /var/www/html/backups/backup.sql 2>/dev/null \
-        || mysql -h "${DB_HOST}" -P "${DB_PORT}" -u "${DB_USERNAME}" -p"${DB_PASSWORD}" "${DB_DATABASE}" < /var/www/html/backups/backup.sql
+    # Use --skip-ssl to avoid TLS errors with self-signed certificates
+    # Use mariadb command (Alpine 3.20+) or fallback to mysql
+    if command -v mariadb >/dev/null 2>&1; then
+        mariadb --skip-ssl -h "${DB_HOST}" -P "${DB_PORT}" -u root -p"${DB_ROOT_PASSWORD}" "${DB_DATABASE}" < /var/www/html/backups/backup.sql 2>/dev/null \
+            || mariadb --skip-ssl -h "${DB_HOST}" -P "${DB_PORT}" -u "${DB_USERNAME}" -p"${DB_PASSWORD}" "${DB_DATABASE}" < /var/www/html/backups/backup.sql
+    else
+        mysql --skip-ssl -h "${DB_HOST}" -P "${DB_PORT}" -u root -p"${DB_ROOT_PASSWORD}" "${DB_DATABASE}" < /var/www/html/backups/backup.sql 2>/dev/null \
+            || mysql --skip-ssl -h "${DB_HOST}" -P "${DB_PORT}" -u "${DB_USERNAME}" -p"${DB_PASSWORD}" "${DB_DATABASE}" < /var/www/html/backups/backup.sql
+    fi
     echo "[entrypoint] Backup restored successfully!"
     HAS_MIGRATIONS="yes"
 fi
