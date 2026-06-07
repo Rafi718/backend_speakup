@@ -45,7 +45,7 @@ services:
         condition: service_healthy
     ports:
       - "8080:80"
-      - "443:443"
+      - "8443:443"
     environment:
       # App
       APP_NAME: "${APP_NAME:-SpeakUp}"
