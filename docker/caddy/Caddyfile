@@ -1,20 +1,11 @@
 {
-	# Disable auto HTTPS (Cloudflare handles certificate)
+	# Disable auto HTTPS
 	auto_https off
-	https_port 443
 	http_port 80
 }
 
-# HTTP - redirect to HTTPS
+# HTTP - SpeakUp API (Behind Reverse Proxy)
 :80 {
-	redir https://{host}{uri} permanent
-}
-
-# HTTPS - SpeakUp API
-:443 {
-	# TLS with Cloudflare Origin Certificate
-	tls /etc/caddy/certs/cert.pem /etc/caddy/certs/key.pem
-
 	# Root directory
 	root * /var/www/html/public
 
